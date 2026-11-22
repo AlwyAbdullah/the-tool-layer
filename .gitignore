@@ -1,0 +1,12 @@
+# binaries and test output
+*.exe
+*.test
+*.out
+coverage.*
+# editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+/kiosk-mcp
+/kiosk-client
