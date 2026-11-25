@@ -108,3 +108,49 @@ func TestWrongAudience(t *testing.T) {
 		t.Fatalf("want 401 invalid_token, got %d %q", r.Status, r.Header.Get("WWW-Authenticate"))
 	}
 }
+
+// The gate and mcp-go must agree on what a request is. A traceparent of
+// the wrong type used to make the gate's decode fail while mcp-go's
+// succeeded, so the call skipped the rate limit and the audit record.
+// Now that call is checked like any other, and a body the gate can't
+// read at all (a JSON-RPC batch) is refused instead of passed on.
+func TestGateFailsClosed(t *testing.T) {
+	srv := httptest.NewServer(nil)
+	defer srv.Close()
+	var auditLog bytes.Buffer
+	h, tok, err := build(srv.URL, &auditLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.Config.Handler = h
+	c := &mcpclient.Client{URL: srv.URL + "/mcp", Token: tok}
+	args := map[string]any{"name": "lookup_order", "arguments": map[string]any{"order_id": "K-1001"}}
+	limited := false
+	for i := 0; i < 100 && !limited; i++ {
+		r, err := c.Do(context.Background(), "tools/call", args, map[string]any{"traceparent": 123})
+		if err != nil {
+			t.Fatal(err)
+		}
+		limited = r.Status == 429
+	}
+	if !limited || !strings.Contains(auditLog.String(), "rate_limited") {
+		t.Fatal("mistyped _meta bypassed the rate limit or the audit log")
+	}
+	auditLog.Reset()
+
+	req := httptest.NewRequest("POST", srv.URL+"/mcp", strings.NewReader(`[{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lookup_order"}}]`))
+	req.RequestURI = ""
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 400 {
+		t.Fatalf("batch: want 400, got %d", resp.StatusCode)
+	}
+	if auditLog.Len() != 0 {
+		t.Fatalf("a refused batch reached the tools: %s", auditLog.String())
+	}
+}

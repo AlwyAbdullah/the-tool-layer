@@ -104,18 +104,24 @@ func (k *checks) gate(next http.Handler) http.Handler {
 			Params struct {
 				Name      string          `json:"name"`
 				Arguments json.RawMessage `json:"arguments"`
-				Meta      struct {
-					TraceParent string `json:"traceparent"`
-				} `json:"_meta"`
+				Meta      map[string]any  `json:"_meta"`
 			} `json:"params"`
 		}
-		if json.Unmarshal(body, &req) != nil || req.Method != "tools/call" {
+		// Fail closed: a body the gate can't read (a batch, a field of the
+		// wrong type) must not reach mcp-go, which may read it differently
+		// and run the call without the checks below.
+		if err := json.Unmarshal(body, &req); err != nil {
+			writeJSON(w, http.StatusBadRequest, jsonrpc.Fail(nil, jsonrpc.InvalidRequest, "unreadable request", nil))
+			return
+		}
+		if req.Method != "tools/call" {
 			next.ServeHTTP(w, r.WithContext(ctx)) // mcp-go answers (or rejects) it
 			return
 		}
 
 		// One audit record per tools/call, whoever stops it.
-		ev := &audit.Event{Time: k.now(), TraceID: audit.TraceID(req.Params.Meta.TraceParent),
+		tp, _ := req.Params.Meta["traceparent"].(string)
+		ev := &audit.Event{Time: k.now(), TraceID: audit.TraceID(tp),
 			Tenant: who.Tenant, Subject: who.Subject, Client: who.ClientID,
 			Tool: req.Params.Name, ArgsHash: audit.HashArgs(req.Params.Arguments), Outcome: audit.Denied}
 		defer func(start time.Time) {
