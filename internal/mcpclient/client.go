@@ -48,7 +48,14 @@ func (c *Client) Do(ctx context.Context, method string, params map[string]any, m
 	if params == nil {
 		params = map[string]any{}
 	}
-	m := map[string]any{"io.modelcontextprotocol/protocolVersion": mcp.Version}
+	// Every 2026-07-28 request carries the protocol version and the
+	// client's capabilities (an empty object: none optional); clientInfo
+	// is a SHOULD.
+	m := map[string]any{
+		"io.modelcontextprotocol/protocolVersion":    mcp.Version,
+		"io.modelcontextprotocol/clientCapabilities": map[string]any{},
+		"io.modelcontextprotocol/clientInfo":         map[string]any{"name": "kiosk-client", "version": "1.0.0"},
+	}
 	for k, v := range meta {
 		m[k] = v
 	}

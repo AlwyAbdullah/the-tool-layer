@@ -59,6 +59,10 @@ The server writes one JSON audit line per call to stderr: tenant, subject, clien
 
 You can point any MCP client that speaks `2026-07-28` over Streamable HTTP at `http://127.0.0.1:8080/mcp` with the printed token as a bearer token.
 
+### Using an SDK? The same checks on mcp-go
+
+[`examples/mcp-go`](examples/mcp-go) runs the same server on [mark3labs/mcp-go](https://github.com/mark3labs/mcp-go). mcp-go handles the protocol, and the book's packages do the checks: HTTP middleware for auth, scope and the 429, an mcp-go tool filter for scope-aware `tools/list`, and an mcp-go tool middleware for quota, idempotency, deprecation and audit. The same end-to-end walkthrough passes against it. It is a separate Go module, so the main repository stays dependency-free.
+
 ## Package map
 
 | Chapter | Package | What it shows |

@@ -25,3 +25,19 @@ jobs:
       - name: build demo binaries
         run: |
           go build ./cmd/...
+
+  mcp-go-example:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: examples/mcp-go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: examples/mcp-go/go.mod
+          cache-dependency-path: examples/mcp-go/go.sum
+      - name: vet
+        run: go vet ./...
+      - name: test (race)
+        run: go test -race -count=1 ./...
